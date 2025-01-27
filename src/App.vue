@@ -515,6 +515,26 @@ export default defineComponent({
 
 <template>
   <div class="min-h-screen flex flex-col">
+    <header class="bg-white/80 border-b border-indigo-100 shadow-sm">
+      <div class="container mx-auto py-4 px-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <div class="text-2xl font-bold text-indigo-600">🧩 Sudoku Vue</div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center">
+              <span class="mr-2 text-sm font-medium text-indigo-600">Difficulty:</span>
+              <select v-model="difficulty"
+                class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="medium">Medium</option>
+                <option value="extreme">Extreme</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
     <div class="container mx-auto flex-grow pt-8 px-4">
       <h1 class="text-2xl font-bold underline mb-3">Sudoku {{ gridSize }} x {{ gridSize }}</h1>
 
@@ -536,11 +556,6 @@ export default defineComponent({
           ]">
           Quick Pencil {{ quickPencilAllEnabled ? '(Auto)' : 'All' }}
         </button>
-        <select v-model="difficulty"
-          class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="medium">Medium</option>
-          <option value="extreme">Extreme</option>
-        </select>
       </div>
 
       <div class="flex flex-col items-center">
