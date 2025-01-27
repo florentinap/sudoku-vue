@@ -85,6 +85,15 @@ export default defineComponent({
         'Digit7': 7,
         'Digit8': 8,
         'Digit9': 9,
+        'Numpad1': 1,
+        'Numpad2': 2,
+        'Numpad3': 3,
+        'Numpad4': 4,
+        'Numpad5': 5,
+        'Numpad6': 6,
+        'Numpad7': 7,
+        'Numpad8': 8,
+        'Numpad9': 9,
         'KeyQ': 10,
         'KeyB': 11,
         'KeyC': 12,
@@ -94,7 +103,11 @@ export default defineComponent({
       };
 
       window.addEventListener('keydown', (ev) => {
+        console.log('Keydown event:', ev.code, 'Key:', ev.key);
+        console.log('Is selecting:', this.isSelecting);
+        console.log('Available keys:', Object.keys(ALLOWED_KEYS));
         if (ev.code in ALLOWED_KEYS) {
+          console.log('Key is allowed, value:', ALLOWED_KEYS[ev.code]);
           this.assignCell(ALLOWED_KEYS[ev.code])
           return;
         }
@@ -214,14 +227,16 @@ export default defineComponent({
       return !hasError;// true if okay
     },
 
-    checkCellValue(i: number, j: number, value: number | null): boolean {
+    checkCellValue(i: number, j: number, value: number | null, setWrong: boolean = true): boolean {
       if (value === null) return true;
       
       // Check row
       for (let col = 0; col < this.gridSize; col++) {
         if (col !== j && this.grid[i][col].cellValue === value) {
-          this.setGridWrongValue(i, col, true);
-          this.setGridWrongValue(i, j, true);
+          if (setWrong) {
+            this.setGridWrongValue(i, col, true);
+            this.setGridWrongValue(i, j, true);
+          }
           return false;
         }
       }
@@ -229,8 +244,10 @@ export default defineComponent({
       // Check column
       for (let row = 0; row < this.gridSize; row++) {
         if (row !== i && this.grid[row][j].cellValue === value) {
-          this.setGridWrongValue(row, j, true);
-          this.setGridWrongValue(i, j, true);
+          if (setWrong) {
+            this.setGridWrongValue(row, j, true);
+            this.setGridWrongValue(i, j, true);
+          }
           return false;
         }
       }
@@ -246,8 +263,10 @@ export default defineComponent({
           const currentCol = boxStartCol + col;
           if ((currentRow !== i || currentCol !== j) && 
               this.grid[currentRow][currentCol].cellValue === value) {
-            this.setGridWrongValue(currentRow, currentCol, true);
-            this.setGridWrongValue(i, j, true);
+            if (setWrong) {
+              this.setGridWrongValue(currentRow, currentCol, true);
+              this.setGridWrongValue(i, j, true);
+            }
             return false;
           }
         }
@@ -354,10 +373,20 @@ export default defineComponent({
     },
 
     quickPencilCell() {
+      if (!this.isSelecting) return;
+      const [i, j] = this.selected;
+      if (this.grid[i][j].cellValue !== null) return;
+      
       this.pencilMode = true;
-      for (let i = 0; i < this.gridSize; i++) {
-        this.assignCell(i + 1);
+      this.clearPencilGridCell(i, j);
+      const savedValue = this.grid[i][j].cellValue;
+      for (let n = 1; n <= this.gridSize; n++) {
+        if (this.checkCellValue(i, j, n, false)) {
+          this.togglePencilGridValue(i, j, n);
+        }
       }
+      this.grid[i][j].cellValue = savedValue;
+      this.pencilMode = false;
     },
     quickPencilAll() {
       const savedMode = this.pencilMode;
