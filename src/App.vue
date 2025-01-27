@@ -260,7 +260,7 @@ export default defineComponent({
 
       const [i, j] = this.selected;
 
-      if (this.grid[i][j].isGiven) return;
+      if (this.grid[i][j].isPrefilled) return;
 
       if (this.pencilMode) {
         if (n === null) {
@@ -405,7 +405,7 @@ export default defineComponent({
 
       for (let i = 0; i < this.gridSize; i++) {
         for (let j = 0; j < this.gridSize; j++) {
-          if (!board[i][j].isGiven) {
+          if (!board[i][j].isPrefilled) {
             board[i][j] = new CellState();
             pencilGrid[i][j] = new Array(this.gridSize).fill(false)
           }
