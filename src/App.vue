@@ -45,6 +45,12 @@ export default defineComponent({
 
     const selectedValue = computed(() => isSelecting.value ? grid.value[selectedIndexes.value[0]][selectedIndexes.value[1]].cellValue : null);
 
+    // Add timer and score state
+    const gameStartTime = ref<number>(0);
+    const elapsedTime = ref<number>(0);
+    const timerInterval = ref<number | null>(null);
+    const score = ref<number>(0);
+    const isGameComplete = ref<boolean>(false);
 
     return {
       sudokuLevel,
@@ -56,6 +62,9 @@ export default defineComponent({
       isSelecting,
       pencilMode,
       selectedValue,
+      elapsedTime,
+      score,
+      isGameComplete,
     }
   },
   mounted() {
@@ -140,6 +149,12 @@ export default defineComponent({
             new CellState(puzzle[i * this.gridSize + j] || null)
           )
         );
+      // Reset game state
+      this.isGameComplete = false;
+      this.stopTimer();
+      this.elapsedTime = 0;
+      this.score = 0;
+      this.startTimer();
     },
     togglePencilMode(): void {
       this.pencilMode = !this.pencilMode;
@@ -199,56 +214,109 @@ export default defineComponent({
     },
 
     checkCellValue(i: number, j: number, value: number | null): boolean {
-      if (value == null) {
-        return false;
-      }
-
-      // Judge row and column
-      for (let k = 0; k < this.gridSize; k++) {
-        if (value === this.grid[i][k].cellValue && j != k) {
-          return true;
-        }
-
-        if (value === this.grid[k][j].cellValue && i != k) {
-          return true;
+      if (value === null) return true;
+      
+      // Check row
+      for (let col = 0; col < this.gridSize; col++) {
+        if (col !== j && this.grid[i][col].cellValue === value) {
+          this.setGridWrongValue(i, col, true);
+          this.setGridWrongValue(i, j, true);
+          return false;
         }
       }
-      // Judge current square
-      const startI = i - i % this.sudokuLevel;
-      const startJ = j - j % this.sudokuLevel;
 
-      const endI = startI + this.sudokuLevel;
-      const endJ = startJ + this.sudokuLevel;
+      // Check column
+      for (let row = 0; row < this.gridSize; row++) {
+        if (row !== i && this.grid[row][j].cellValue === value) {
+          this.setGridWrongValue(row, j, true);
+          this.setGridWrongValue(i, j, true);
+          return false;
+        }
+      }
 
-      for (let k = startI; k < endI; k++) {
-        for (let m = startJ; m < endJ; m++) {
-          if (i == k && j == m) continue; // Skip the current cell
-
-          if (value === this.grid[k][m].cellValue) {
-            return true;
+      // Check box
+      const boxSize = this.sudokuLevel;
+      const boxStartRow = Math.floor(i / boxSize) * boxSize;
+      const boxStartCol = Math.floor(j / boxSize) * boxSize;
+      
+      for (let row = 0; row < boxSize; row++) {
+        for (let col = 0; col < boxSize; col++) {
+          const currentRow = boxStartRow + row;
+          const currentCol = boxStartCol + col;
+          if ((currentRow !== i || currentCol !== j) && 
+              this.grid[currentRow][currentCol].cellValue === value) {
+            this.setGridWrongValue(currentRow, currentCol, true);
+            this.setGridWrongValue(i, j, true);
+            return false;
           }
         }
       }
 
-      return false;
+      return true;
+    },
+
+    assignCell(n: number | null): void {
+      if (!this.isSelecting) return;
+
+      const [i, j] = this.selected;
+
+      if (this.grid[i][j].isGiven) return;
+
+      if (this.pencilMode) {
+        if (n === null) {
+          this.clearPencilGridCell(i, j);
+          return;
+        }
+        this.togglePencilGridValue(i, j, n);
+        return;
+      }
+
+      // Clear all wrong states before validation
+      for (let row = 0; row < this.gridSize; row++) {
+        for (let col = 0; col < this.gridSize; col++) {
+          this.setGridWrongValue(row, col, false);
+        }
+      }
+      
+      // Set the new value
+      this.grid[i][j].cellValue = n;
+
+      // If a value was entered (not cleared), check if it's correct
+      if (n !== null) {
+        this.checkCellValue(i, j, n);
+      }
+
+      // Clear pencil marks when setting a value
+      this.clearPencilGridCell(i, j);
+      
+      // Check if the board is complete
+      this.judgeBoard();
     },
 
     judgeBoard(): void {
-      let hasWon = true;
+      let isComplete = true;
+      
       for (let i = 0; i < this.gridSize; i++) {
         for (let j = 0; j < this.gridSize; j++) {
+          // Check if cell is empty
           if (this.grid[i][j].cellValue === null) {
-            console.log("cell ", i, j, " is empty");
-            hasWon = false;
+            isComplete = false;
+            return;
           }
-
-          const isCellCorrect = this.judgeCell(i, j);
-
-          hasWon = hasWon && isCellCorrect;
+          // Check if cell is correct
+          if (!this.judgeCell(i, j)) {
+            isComplete = false;
+            return;
+          }
         }
       }
 
-      if (hasWon) alert("Yay you won !\n... Yes that's all I can say now.")
+      // Only if all cells are filled and correct
+      if (isComplete) {
+        this.isGameComplete = true;
+        this.stopTimer();
+        this.calculateScore();
+      }
     },
 
     setGridValue(i: number, j: number, cellState: CellState): void {
@@ -331,46 +399,13 @@ export default defineComponent({
       }
 
     },
-    assignCell(n: number | null): void {
-      const i = this.selected[0]
-      const j = this.selected[1]
-
-      if (i < 0 || i >= this.gridSize || j < 0 && j >= this.gridSize) return;
-
-      const cell = this.grid[i][j];
-
-      if (cell.isPrefilled) return;
-      if (cell.cellValue === n) return; // avoid unnecessary operations
-      if (n && n > this.gridSize) return; // For sudokus over 9*9
-
-      if (n && this.pencilMode) {
-        if (!this.checkCellValue(i, j, n)) {
-          this.togglePencilGridValue(i, j, n)
-        }
-      } else {
-        this.setGridValue(i, j, {
-          ...cell,
-          cellValue: n,
-        })
-
-        this.clearPencilGridCell(i, j);
-
-        if (n != null) {
-          this.updatePencilGridValues(i, j, n);
-        }
-
-        this.judgeBoard();
-      }
-      // clearSelection();
-    },
-
     clearAll(): void {
       let board = this.grid;
       let pencilGrid = this.pencilGrid
 
       for (let i = 0; i < this.gridSize; i++) {
         for (let j = 0; j < this.gridSize; j++) {
-          if (!board[i][j].isPrefilled) {
+          if (!board[i][j].isGiven) {
             board[i][j] = new CellState();
             pencilGrid[i][j] = new Array(this.gridSize).fill(false)
           }
@@ -379,7 +414,27 @@ export default defineComponent({
 
       this.grid = board;
       this.pencilGrid = pencilGrid;
-    }
+    },
+    startTimer() {
+      this.gameStartTime = Date.now();
+      this.timerInterval = window.setInterval(() => {
+        this.elapsedTime = Math.floor((Date.now() - this.gameStartTime) / 1000);
+      }, 1000);
+    },
+
+    stopTimer() {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+    },
+
+    calculateScore() {
+      const baseScore = 1000;
+      const timeMultiplier = Math.max(0, 1 - (this.elapsedTime / 600)); // 10 minutes max time
+      const difficultyMultiplier = this.difficulty === "extreme" ? 2 : 1;
+      this.score = Math.round(baseScore * timeMultiplier * difficultyMultiplier);
+    },
   }
 })
 </script>
@@ -425,7 +480,7 @@ export default defineComponent({
             <div class="md:basis-1/6"></div>
             <div class="md:basis-3/6">
               <sudoku-grid :grid="grid" :pencil-grid="pencilGrid" :sudoku-level="sudokuLevel">
-                <template v-slot.default="{ i, j, cell, pencil }">
+                <template v-slot:default="{ i, j, cell, pencil }">
                   <sudoku-cell
                     :cell="grid[i][j]"
                     :pencil="pencil"
@@ -450,6 +505,17 @@ export default defineComponent({
           </div>
         </div>
       </div>
+    </div>
+    <div class="mb-4 flex justify-between items-center">
+      <div class="text-xl">
+        Time: {{ Math.floor(elapsedTime / 60) }}:{{ (elapsedTime % 60).toString().padStart(2, '0') }}
+      </div>
+      <div class="text-xl">
+        Score: {{ score }}
+      </div>
+    </div>
+    <div v-if="isGameComplete" class="mt-4 text-center text-2xl text-green-600 font-bold">
+      Congratulations! You completed the puzzle!
     </div>
   </div>
 </template>
