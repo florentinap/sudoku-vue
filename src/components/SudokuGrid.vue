@@ -21,18 +21,18 @@ export default defineComponent({
 </script>
 
 <template>
-  <div class="game-board mt-6" :class="{ 'game-board-4': (sudokuLevel === 4) }">
-    <template v-for="(_, block_i) in sudokuLevel">
-      <template v-for="(_, block_j) in sudokuLevel">
+  <div class="game-board mt-6">
+    <template v-for="(_, block_i) in 3">
+      <template v-for="(_, block_j) in 3">
         <!-- Each block is a 3x3 -->
-        <div class="grid-square" :class="{ 'grid-square-4': (sudokuLevel === 4) }">
-          <template v-for="(_, i) in sudokuLevel">
-            <template v-for="(_, j) in sudokuLevel" :key="(i + '' + j)">
+        <div class="grid-square">
+          <template v-for="(_, i) in 3">
+            <template v-for="(_, j) in 3" :key="(i + '' + j)">
               <slot
-                :i="block_i * sudokuLevel + i"
-                :j="block_j * sudokuLevel + j"
-                :cell="grid[block_i * sudokuLevel + i][block_j * sudokuLevel + j]"
-                :pencil="pencilGrid[block_i * sudokuLevel + i][block_j * sudokuLevel + j]"
+                :i="block_i * 3 + i"
+                :j="block_j * 3 + j"
+                :cell="grid[block_i * 3 + i][block_j * 3 + j]"
+                :pencil="pencilGrid[block_i * 3 + i][block_j * 3 + j]"
               ></slot>
             </template>
           </template>
@@ -57,22 +57,10 @@ export default defineComponent({
   max-height: 462px;
 }
 
-.game-board-4 {
-  @apply grid-rows-4;
-  @apply grid-cols-4;
-  height: calc(50px * 16);
-  width: calc(50px * 16);
-}
-
 .grid-square {
   @apply grid grid-cols-3 grid-rows-3;
   @apply border border-indigo-200;
   @apply bg-white/50;
   @apply p-0.5;
-}
-
-.grid-square-4 {
-  @apply grid-rows-4;
-  @apply grid-cols-4;
 }
 </style>

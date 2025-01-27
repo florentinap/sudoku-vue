@@ -1,12 +1,11 @@
 <script lang="ts">
-import { ref, computed, defineComponent, onMounted } from 'vue';
+import { ref, computed, defineComponent, onMounted, watch } from 'vue';
 import type { Ref } from 'vue';
 import CellState from './models/CellState';
 import SudokuCell from './components/SudokuCell.vue';
 import SudokuGrid from './components/SudokuGrid.vue';
-
-import PuzzleSet from './models/SudokuPuzzleSet.json';
 import { SudokuSolver } from './services/SudokuSolver';
+import PuzzleSet from './models/SudokuPuzzleSet.json';
 
 export default defineComponent({
   components: {
@@ -17,17 +16,22 @@ export default defineComponent({
     const sudokuLevel = ref(3); // n
     const gridSize = computed(() => sudokuLevel.value ** 2); // n*n
     const difficulty: Ref<("medium" | "extreme")> = ref("medium");
-
     const grid: Ref<CellState[][]> = ref(
       Array(gridSize.value)
-        .fill(null).map((_, i) =>
-          Array(gridSize.value).fill(null).map((_, j) =>
-            new CellState()
-          )
+        .fill(null)
+        .map(() => Array(gridSize.value).fill(null).map(() => new CellState()))
+    );
+
+    const pencilGrid: Ref<boolean[][][]> = ref(
+      Array(gridSize.value)
+        .fill(null)
+        .map(() => 
+          Array(gridSize.value)
+            .fill(null)
+            .map(() => Array(9).fill(false))
         )
     );
 
-    const pencilGrid: Ref<boolean[][][]> = ref(Array(gridSize.value).fill(Array(gridSize.value).fill(Array(9).fill(false))))
     const selectedIndexes = ref([-1, -1])
     const pencilMode = ref(false);
     const quickPencilAllEnabled = ref(false);
@@ -71,11 +75,17 @@ export default defineComponent({
 
     function clearAll() {
       grid.value = Array(gridSize.value)
-        .fill(null).map((_, i) =>
-          Array(gridSize.value).fill(null).map((_, j) =>
-            new CellState()
-          )
+        .fill(null)
+        .map(() => Array(gridSize.value).fill(null).map(() => new CellState()));
+      
+      pencilGrid.value = Array(gridSize.value)
+        .fill(null)
+        .map(() => 
+          Array(gridSize.value)
+            .fill(null)
+            .map(() => Array(9).fill(false))
         );
+        
       selectedIndexes.value = [-1, -1];
       pencilMode.value = false;
       quickPencilAllEnabled.value = false;
@@ -86,7 +96,8 @@ export default defineComponent({
       const puzzle: number[] = generateSudoku(difficulty.value);
 
       grid.value = Array(gridSize.value)
-        .fill(null).map((_, i) =>
+        .fill(null)
+        .map((_, i) =>
           Array(gridSize.value).fill(null).map((_, j) =>
             new CellState(puzzle[i * gridSize.value + j] || null)
           )
@@ -390,7 +401,7 @@ export default defineComponent({
     function clearPencilGridCell(i: number, j: number): void {
       const row = pencilGrid.value[i].slice(0);
 
-      row[j] = new Array(gridSize.value).fill(false);
+      row[j] = new Array(9).fill(false);
       pencilGrid.value[i] = row;
     }
 
@@ -466,6 +477,10 @@ export default defineComponent({
 
     }
 
+    watch(sudokuLevel, () => {
+      clearAll();
+    });
+
     // Call newGame on mount
     onMounted(() => {
       newGame();
@@ -515,29 +530,20 @@ export default defineComponent({
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <header class="bg-white/80 border-b border-indigo-100 shadow-sm">
-      <div class="container mx-auto py-4 px-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <div class="text-2xl font-bold text-indigo-600">🧩 Sudoku Vue</div>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center">
-              <span class="mr-2 text-sm font-medium text-indigo-600">Difficulty:</span>
-              <select v-model="difficulty"
-                class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="medium">Medium</option>
-                <option value="extreme">Extreme</option>
-              </select>
-            </div>
-          </div>
+    <header class="bg-gradient-to-r from-indigo-500 to-purple-500 p-4 text-white">
+      <h1 class="text-2xl font-bold text-center">Sudoku</h1>
+      <div class="flex justify-center gap-4 mt-4">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium">Difficulty:</label>
+          <select v-model="difficulty" class="bg-white text-gray-900 rounded px-2 py-1" @change="newGame">
+            <option value="medium">Medium</option>
+            <option value="extreme">Extreme</option>
+          </select>
         </div>
       </div>
     </header>
 
     <div class="container mx-auto flex-grow pt-8 px-4">
-      <h1 class="text-2xl font-bold underline mb-3">Sudoku {{ gridSize }} x {{ gridSize }}</h1>
-
       <div class="flex justify-center space-x-4 mb-4">
         <button @click="newGame"
           class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
