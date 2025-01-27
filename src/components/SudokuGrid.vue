@@ -54,7 +54,10 @@ export default defineComponent({
 
 .game-board {
   @apply my-grid;
-  @apply border-2 border-slate-500;
+  @apply border-4 border-indigo-300;
+  @apply bg-gradient-to-br from-indigo-50 to-purple-50;
+  @apply rounded-lg;
+  @apply shadow-lg;
 
   height: calc(100vw + 6px);
   width: 100vw;
@@ -67,14 +70,12 @@ export default defineComponent({
   @apply grid-cols-4;
   height: calc(50px * 16);
   width: calc(50px * 16);
-  /* // 462px; */
 }
 
 .grid-square {
   @apply my-grid;
-  /* row-gap: 1px;
-  column-gap: 1px; */
-  @apply border border-slate-500;
+  @apply border border-indigo-200;
+  @apply bg-white/50;
 }
 
 .grid-square-4 {

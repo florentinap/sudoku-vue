@@ -522,42 +522,55 @@ export default defineComponent({
 
 <style lang="postcss">
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Poppins', Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
-  color: #2c3e50;
+  @apply bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50;
+  @apply text-indigo-900;
   height: 100vh;
 }
 
 .number-cell {
   cursor: pointer;
-  @apply text-3xl;
-  @apply border border-slate-600;
+  @apply text-2xl font-medium;
+  @apply border border-indigo-200;
+  @apply bg-white/80 hover:bg-indigo-100;
+  @apply transition-colors duration-200;
+  @apply rounded;
 }
 
 .button {
-  @apply h-10 px-6 font-semibold rounded-md bg-white text-black;
-  @apply border border-slate-700;
+  @apply h-10 px-6 font-medium rounded-lg;
+  @apply bg-white/80 text-indigo-700;
+  @apply border border-indigo-200;
+  @apply hover:bg-indigo-50 transition-colors duration-200;
 }
 
 .button-dark {
-  @apply button;
-  @apply bg-slate-700 text-white;
+  @apply h-10 px-6 font-medium rounded-lg;
+  @apply bg-indigo-600 text-white;
+  @apply border-none;
+  @apply hover:bg-indigo-700 transition-colors duration-200;
+  @apply shadow-sm;
 }
 
 kbd {
-  background-color: #eee;
-  border-radius: 3px;
-  border: 1px solid #b4b4b4;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2),
-    0 2px 0 0 rgba(255, 255, 255, 0.7) inset;
-  color: #333;
-  display: inline-block;
-  font-size: 0.85em;
-  font-weight: 700;
-  line-height: 1;
-  padding: 2px 4px;
+  @apply bg-white/80;
+  @apply rounded;
+  @apply border border-indigo-200;
+  @apply shadow-sm;
+  @apply text-indigo-700;
+  @apply px-2 py-1;
+  @apply text-sm font-medium;
   white-space: nowrap;
+}
+
+select {
+  @apply h-10 px-4 rounded-lg;
+  @apply bg-white/80 text-indigo-700;
+  @apply border border-indigo-200;
+  @apply hover:bg-indigo-50 transition-colors duration-200;
+  @apply focus:outline-none focus:ring-2 focus:ring-indigo-300;
 }
 </style>
