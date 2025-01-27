@@ -1,23 +1,19 @@
 <script lang="ts">
-import { ref, computed, defineComponent } from 'vue';
+import { ref, computed, defineComponent, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import CellState from './models/CellState';
 import SudokuCell from './components/SudokuCell.vue';
 import SudokuGrid from './components/SudokuGrid.vue';
 
 import PuzzleSet from './models/SudokuPuzzleSet.json';
+import { SudokuSolver } from './services/SudokuSolver';
 
 export default defineComponent({
   components: {
     SudokuCell,
     SudokuGrid
   },
-  /**
-   * Will be using setup to define data and computed values
-   * I am using this instead of Data so that I can more easily initialize the values along with ts-types
-   */
   setup() {
-
     const sudokuLevel = ref(3); // n
     const gridSize = computed(() => sudokuLevel.value ** 2); // n*n
     const difficulty: Ref<("medium" | "extreme")> = ref("medium");
@@ -32,10 +28,14 @@ export default defineComponent({
     );
 
     const pencilGrid: Ref<boolean[][][]> = ref(Array(gridSize.value).fill(Array(gridSize.value).fill(Array(9).fill(false))))
-
     const selectedIndexes = ref([-1, -1])
-
     const pencilMode = ref(false);
+    const quickPencilAllEnabled = ref(false);
+    const gameStartTime = ref<number>(0);
+    const elapsedTime = ref<number>(0);
+    const timerInterval = ref<number | null>(null);
+    const score = ref<number>(0);
+    const isGameComplete = ref<boolean>(false);
 
     const isSelecting = computed(() => (selectedIndexes.value[0] >= 0
       && selectedIndexes.value[0] < gridSize.value
@@ -45,34 +45,82 @@ export default defineComponent({
 
     const selectedValue = computed(() => isSelecting.value ? grid.value[selectedIndexes.value[0]][selectedIndexes.value[1]].cellValue : null);
 
-    // Add timer and score state
-    const gameStartTime = ref<number>(0);
-    const elapsedTime = ref<number>(0);
-    const timerInterval = ref<number | null>(null);
-    const score = ref<number>(0);
-    const isGameComplete = ref<boolean>(false);
-
-    return {
-      sudokuLevel,
-      pencilGrid,
-      grid,
-      gridSize,
-      difficulty,
-      selected: selectedIndexes,
-      isSelecting,
-      pencilMode,
-      selectedValue,
-      elapsedTime,
-      score,
-      isGameComplete,
+    function startTimer() {
+      gameStartTime.value = Date.now();
+      timerInterval.value = window.setInterval(() => {
+        elapsedTime.value = Math.floor((Date.now() - gameStartTime.value) / 1000);
+      }, 1000);
     }
-  },
-  mounted() {
-    this.registerKeyboardEvents();
-    this.newGame();
-  },
-  methods: {
-    registerKeyboardEvents() {
+
+    function stopTimer() {
+      if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+        timerInterval.value = null;
+      }
+    }
+
+    function calculateScore() {
+      // Simple scoring based on time taken
+      score.value = Math.max(1000 - elapsedTime.value * 2, 0);
+    }
+
+    function generateSudoku(difficultyLevel: "extreme" | "medium"): number[] {
+      const puzzle = PuzzleSet[difficultyLevel][Math.floor(Math.random() * PuzzleSet[difficultyLevel].length)] as number[];
+      return puzzle;
+    }
+
+    function clearAll() {
+      grid.value = Array(gridSize.value)
+        .fill(null).map((_, i) =>
+          Array(gridSize.value).fill(null).map((_, j) =>
+            new CellState()
+          )
+        );
+      selectedIndexes.value = [-1, -1];
+      pencilMode.value = false;
+      quickPencilAllEnabled.value = false;
+    }
+
+    function newGame() {
+      clearAll();
+      const puzzle: number[] = generateSudoku(difficulty.value);
+
+      grid.value = Array(gridSize.value)
+        .fill(null).map((_, i) =>
+          Array(gridSize.value).fill(null).map((_, j) =>
+            new CellState(puzzle[i * gridSize.value + j] || null)
+          )
+        );
+      isGameComplete.value = false;
+      stopTimer();
+      elapsedTime.value = 0;
+      score.value = 0;
+      startTimer();
+    }
+
+    function solvePuzzle() {
+      const solver = new SudokuSolver(sudokuLevel.value);
+      const currentGrid = grid.value.map(row => 
+        row.map(cell => cell.cellValue)
+      );
+      const solution = solver.solve(currentGrid);
+      
+      if (solution) {
+        // Apply solution to grid
+        for (let i = 0; i < gridSize.value; i++) {
+          for (let j = 0; j < gridSize.value; j++) {
+            if (grid.value[i][j].cellValue === null) {
+              grid.value[i][j].cellValue = solution[i][j];
+            }
+          }
+        }
+        isGameComplete.value = true;
+        stopTimer();
+        calculateScore();
+      }
+    }
+
+    function registerKeyboardEvents() {
       const ALLOWED_KEYS: { [key: string]: number | null } = {
         'Delete': null,
         'Backspace': null,
@@ -104,152 +152,132 @@ export default defineComponent({
 
       window.addEventListener('keydown', (ev) => {
         if (ev.code in ALLOWED_KEYS) {
-          this.assignCell(ALLOWED_KEYS[ev.code])
+          assignCell(ALLOWED_KEYS[ev.code])
           return;
         }
 
-        if (!this.isSelecting) return;
+        if (!isSelecting.value) return;
 
         if (ev.code == 'Space') {
-          this.togglePencilMode()
+          togglePencilMode()
           return;
         }
 
         if (ev.code == 'AltLeft') {
-          this.quickPencilCell()
+          quickPencilCell()
           return;
         }
 
-        const i = this.selected[0];
-        const j = this.selected[1]
+        const i = selectedIndexes.value[0];
+        const j = selectedIndexes.value[1]
         if (ev.code == 'ArrowRight') {
-          this.selected = [i, (j >= this.gridSize - 1) ? j : j + 1];
+          selectedIndexes.value = [i, (j >= gridSize.value - 1) ? j : j + 1];
           return;
         }
 
         if (ev.code == 'ArrowLeft') {
-          this.selected = [i, j === 0 ? j : j - 1];
+          selectedIndexes.value = [i, j === 0 ? j : j - 1];
           return;
         }
 
         if (ev.code == 'ArrowUp') {
-          this.selected = [i === 0 ? i : i - 1, j];
+          selectedIndexes.value = [i === 0 ? i : i - 1, j];
           return;
         }
 
         if (ev.code == 'ArrowDown') {
-          this.selected = [i >= this.gridSize - 1 ? i : i + 1, j];
+          selectedIndexes.value = [i >= gridSize.value - 1 ? i : i + 1, j];
           return;
         }
       });
-    },
-    generateSudoku(difficulty: ("extreme" | "medium")): number[] {
+    }
 
-      const puzzle = PuzzleSet[difficulty][Math.floor(Math.random() * PuzzleSet[difficulty].length)] as number[];
+    function togglePencilMode(): void {
+      pencilMode.value = !pencilMode.value;
+    }
 
-      return puzzle;
-    },
-    newGame(): void {
-      this.clearAll();
-      const puzzle: number[] = this.generateSudoku(this.difficulty);
+    function selectCell(i: number, j: number): void {
+      selectedIndexes.value = [i, j];
+    }
 
-      this.grid = Array(this.gridSize)
-        .fill(null).map((_, i) =>
-          Array(this.gridSize).fill(null).map((_, j) =>
-            new CellState(puzzle[i * this.gridSize + j] || null)
-          )
-        );
-      // Reset game state
-      this.isGameComplete = false;
-      this.stopTimer();
-      this.elapsedTime = 0;
-      this.score = 0;
-      this.startTimer();
-    },
-    togglePencilMode(): void {
-      this.pencilMode = !this.pencilMode;
-    },
+    function clearSelection(): void { 
+      selectedIndexes.value = [-1, -1]; 
+    }
 
-    selectCell(i: number, j: number): void {
-      this.selected = [i, j];
-    },
-
-    clearSelection(): void { this.selected = [-1, -1]; },
-
-    judgeCell(i: number, j: number): boolean {
+    function judgeCell(i: number, j: number): boolean {
       let hasError = false;
 
-      const value = this.grid[i][j].cellValue;
+      const value = grid.value[i][j].cellValue;
 
       if (value == null) {
-        this.setGridWrongValue(i, j, false); // in case when a cell value is deleted
+        setGridWrongValue(i, j, false); // in case when a cell value is deleted
         return true;
       }
 
       // Judge row and column
-      for (let k = 0; k < this.gridSize; k++) {
-        if (value === this.grid[i][k].cellValue && j != k) {
+      for (let k = 0; k < gridSize.value; k++) {
+        if (value === grid.value[i][k].cellValue && j != k) {
           hasError = true;
 
-          this.setGridWrongValue(i, k);
+          setGridWrongValue(i, k);
         }
 
-        if (value === this.grid[k][j].cellValue && i != k) {
+        if (value === grid.value[k][j].cellValue && i != k) {
           hasError = true;
-          this.setGridWrongValue(k, j);
+          setGridWrongValue(k, j);
         }
       }
       // Judge current square
-      const startI = i - i % this.sudokuLevel;
-      const startJ = j - j % this.sudokuLevel;
+      const startI = i - i % sudokuLevel.value;
+      const startJ = j - j % sudokuLevel.value;
 
-      const endI = startI + this.sudokuLevel;
-      const endJ = startJ + this.sudokuLevel;
+      const endI = startI + sudokuLevel.value;
+      const endJ = startJ + sudokuLevel.value;
 
       for (let k = startI; k < endI; k++) {
         for (let m = startJ; m < endJ; m++) {
           if (i == k && j == m) continue; // Skip the current cell
 
-          if (value === this.grid[k][m].cellValue) {
+          if (value === grid.value[k][m].cellValue) {
             hasError = true;
 
-            this.setGridWrongValue(k, m);
+            setGridWrongValue(k, m);
           }
         }
       }
 
-      this.setGridWrongValue(i, j, hasError);
+      setGridWrongValue(i, j, hasError);
 
       return !hasError;// true if okay
-    },
+    }
 
-    checkCellValue(i: number, j: number, value: number | null, setWrong: boolean = true): boolean {
+    function checkCellValue(i: number, j: number, value: number | null, setWrong: boolean = true): boolean {
       if (value === null) return true;
       
       // Check row
-      for (let col = 0; col < this.gridSize; col++) {
-        if (col !== j && this.grid[i][col].cellValue === value) {
+      for (let col = 0; col < gridSize.value; col++) {
+        if (col !== j && grid.value[i][col].cellValue === value) {
           if (setWrong) {
-            this.setGridWrongValue(i, col, true);
-            this.setGridWrongValue(i, j, true);
+            setGridWrongValue(i, col, true);
+            setGridWrongValue(i, j, true);
           }
           return false;
         }
       }
 
       // Check column
-      for (let row = 0; row < this.gridSize; row++) {
-        if (row !== i && this.grid[row][j].cellValue === value) {
+      for (let row = 0; row < gridSize.value; row++) {
+        if (row !== i && grid.value[row][j].cellValue === value) {
           if (setWrong) {
-            this.setGridWrongValue(row, j, true);
-            this.setGridWrongValue(i, j, true);
+            setGridWrongValue(row, j, true);
+            setGridWrongValue(i, j, true);
           }
           return false;
         }
       }
 
       // Check box
-      const boxSize = this.sudokuLevel;
+      const boxSize = sudokuLevel.value;
       const boxStartRow = Math.floor(i / boxSize) * boxSize;
       const boxStartCol = Math.floor(j / boxSize) * boxSize;
       
@@ -258,10 +286,10 @@ export default defineComponent({
           const currentRow = boxStartRow + row;
           const currentCol = boxStartCol + col;
           if ((currentRow !== i || currentCol !== j) && 
-              this.grid[currentRow][currentCol].cellValue === value) {
+              grid.value[currentRow][currentCol].cellValue === value) {
             if (setWrong) {
-              this.setGridWrongValue(currentRow, currentCol, true);
-              this.setGridWrongValue(i, j, true);
+              setGridWrongValue(currentRow, currentCol, true);
+              setGridWrongValue(i, j, true);
             }
             return false;
           }
@@ -269,58 +297,63 @@ export default defineComponent({
       }
 
       return true;
-    },
+    }
 
-    assignCell(n: number | null): void {
-      if (!this.isSelecting) return;
+    function assignCell(n: number | null): void {
+      if (!isSelecting.value) return;
 
-      const [i, j] = this.selected;
+      const [i, j] = selectedIndexes.value;
 
-      if (this.grid[i][j].isPrefilled) return;
+      if (grid.value[i][j].isPrefilled) return;
 
-      if (this.pencilMode) {
+      if (pencilMode.value) {
         if (n === null) {
-          this.clearPencilGridCell(i, j);
+          clearPencilGridCell(i, j);
           return;
         }
-        this.togglePencilGridValue(i, j, n);
+        togglePencilGridValue(i, j, n);
         return;
       }
 
-      // Clear all wrong states before validation
-      for (let row = 0; row < this.gridSize; row++) {
-        for (let col = 0; col < this.gridSize; col++) {
-          this.setGridWrongValue(row, col, false);
+      // Clear all wrong marks
+      for (let row = 0; row < gridSize.value; row++) {
+        for (let col = 0; col < gridSize.value; col++) {
+          setGridWrongValue(row, col, false);
         }
       }
       
-      // Set the new value
-      this.grid[i][j].cellValue = n;
+      // Set the value
+      grid.value[i][j].cellValue = n;
 
       // If a value was entered (not cleared), check if it's correct
       if (n !== null) {
-        this.checkCellValue(i, j, n);
+        checkCellValue(i, j, n);
       }
 
       // Clear pencil marks when setting a value
-      this.clearPencilGridCell(i, j);
+      clearPencilGridCell(i, j);
       
-      // Check if the board is complete
-      this.judgeBoard();
-    },
+      // If Quick Pencil All is enabled, update pencil marks
+      if (quickPencilAllEnabled.value) {
+        quickPencilAll();
+      }
 
-    judgeBoard(): void {
+      // Check if the board is complete
+      judgeBoard();
+    }
+
+    function judgeBoard(): void {
       let isComplete = true;
       
-      for (let i = 0; i < this.gridSize; i++) {
-        for (let j = 0; j < this.gridSize; j++) {
+      for (let i = 0; i < gridSize.value; i++) {
+        for (let j = 0; j < gridSize.value; j++) {
           // Check if cell is empty
-          if (this.grid[i][j].cellValue === null) {
+          if (grid.value[i][j].cellValue === null) {
             isComplete = false;
             return;
           }
           // Check if cell is correct
-          if (!this.judgeCell(i, j)) {
+          if (!judgeCell(i, j)) {
             isComplete = false;
             return;
           }
@@ -329,138 +362,153 @@ export default defineComponent({
 
       // Only if all cells are filled and correct
       if (isComplete) {
-        this.isGameComplete = true;
-        this.stopTimer();
-        this.calculateScore();
+        isGameComplete.value = true;
+        stopTimer();
+        calculateScore();
       }
-    },
+    }
 
-    setGridValue(i: number, j: number, cellState: CellState): void {
-      let modifiedRow = this.grid[i].slice(0);
+    function setGridValue(i: number, j: number, cellState: CellState): void {
+      let modifiedRow = grid.value[i].slice(0);
 
       modifiedRow[j] = cellState;
 
-      this.grid[i] = modifiedRow;
-    },
+      grid.value[i] = modifiedRow;
+    }
 
-    togglePencilGridValue(i: number, j: number, n: number): void {
-      const row = this.pencilGrid[i].slice(0);
+    function togglePencilGridValue(i: number, j: number, n: number): void {
+      const row = pencilGrid.value[i].slice(0);
 
       const arr = row[j].slice(0);
 
       arr[n - 1] = !arr[n - 1];
 
       row[j] = arr;
-      this.pencilGrid[i] = row;
-    },
+      pencilGrid.value[i] = row;
+    }
 
-    clearPencilGridCell(i: number, j: number): void {
-      const row = this.pencilGrid[i].slice(0);
+    function clearPencilGridCell(i: number, j: number): void {
+      const row = pencilGrid.value[i].slice(0);
 
-      row[j] = new Array(this.gridSize).fill(false);
-      this.pencilGrid[i] = row;
-    },
+      row[j] = new Array(gridSize.value).fill(false);
+      pencilGrid.value[i] = row;
+    }
 
-    setGridWrongValue(i: number, j: number, wrong = true) {
-      this.setGridValue(i, j, {
-        ...this.grid[i][j],
+    function setGridWrongValue(i: number, j: number, wrong = true) {
+      setGridValue(i, j, {
+        ...grid.value[i][j],
         isWrong: wrong,
       })
-    },
+    }
 
-    quickPencilCell() {
-      if (!this.isSelecting) return;
-      const [i, j] = this.selected;
-      if (this.grid[i][j].cellValue !== null) return;
+    function quickPencilCell() {
+      if (!isSelecting.value) return;
+      const [i, j] = selectedIndexes.value;
+      if (grid.value[i][j].cellValue !== null) return;
       
-      this.pencilMode = true;
-      this.clearPencilGridCell(i, j);
-      const savedValue = this.grid[i][j].cellValue;
-      for (let n = 1; n <= this.gridSize; n++) {
-        if (this.checkCellValue(i, j, n, false)) {
-          this.togglePencilGridValue(i, j, n);
+      pencilMode.value = true;
+      clearPencilGridCell(i, j);
+      const savedValue = grid.value[i][j].cellValue;
+      for (let n = 1; n <= gridSize.value; n++) {
+        if (checkCellValue(i, j, n, false)) {
+          togglePencilGridValue(i, j, n);
         }
       }
-      this.grid[i][j].cellValue = savedValue;
-      this.pencilMode = false;
-    },
-    quickPencilAll() {
-      const savedMode = this.pencilMode;
-      for (let i = 0; i < this.gridSize; i++) {
-        for (let j = 0; j < this.gridSize; j++) {
-          this.selected = [i, j]
-          this.clearPencilGridCell(i, j);
-          this.quickPencilCell()
+      grid.value[i][j].cellValue = savedValue;
+      pencilMode.value = false;
+    }
+
+    function quickPencilAll() {
+      const savedMode = pencilMode.value;
+      for (let i = 0; i < gridSize.value; i++) {
+        for (let j = 0; j < gridSize.value; j++) {
+          selectedIndexes.value = [i, j]
+          clearPencilGridCell(i, j);
+          quickPencilCell()
         }
       }
-      this.clearSelection();
+      clearSelection();
 
-      this.pencilMode = savedMode;
-    },
-    updatePencilGridValues(i: number, j: number, n: number): void {
+      pencilMode.value = savedMode;
+    }
 
-      for (let k = 0; k < this.gridSize; k++) {
-        if (this.pencilGrid[i][k][n - 1]) {
-          this.togglePencilGridValue(i, k, n);
+    function toggleQuickPencilAll() {
+      quickPencilAllEnabled.value = !quickPencilAllEnabled.value;
+      quickPencilAll(); // Always run quickPencilAll when button is clicked
+    }
+
+    function updatePencilGridValues(i: number, j: number, n: number): void {
+
+      for (let k = 0; k < gridSize.value; k++) {
+        if (pencilGrid.value[i][k][n - 1]) {
+          togglePencilGridValue(i, k, n);
         }
 
-        if (this.pencilGrid[k][j][n - 1]) {
-          this.togglePencilGridValue(k, j, n);
+        if (pencilGrid.value[k][j][n - 1]) {
+          togglePencilGridValue(k, j, n);
         }
 
       }
       // Judge current square
-      const startI = i - i % this.sudokuLevel;
-      const startJ = j - j % this.sudokuLevel;
+      const startI = i - i % sudokuLevel.value;
+      const startJ = j - j % sudokuLevel.value;
 
-      const endI = startI + this.sudokuLevel;
-      const endJ = startJ + this.sudokuLevel;
+      const endI = startI + sudokuLevel.value;
+      const endJ = startJ + sudokuLevel.value;
 
       for (let k = startI; k < endI; k++) {
         for (let m = startJ; m < endJ; m++) {
-          if (this.pencilGrid[k][m][n - 1]) {
-            this.togglePencilGridValue(k, m, n);
+          if (pencilGrid.value[k][m][n - 1]) {
+            togglePencilGridValue(k, m, n);
           }
         }
       }
 
-    },
-    clearAll(): void {
-      let board = this.grid;
-      let pencilGrid = this.pencilGrid
+    }
 
-      for (let i = 0; i < this.gridSize; i++) {
-        for (let j = 0; j < this.gridSize; j++) {
-          if (!board[i][j].isPrefilled) {
-            board[i][j] = new CellState();
-            pencilGrid[i][j] = new Array(this.gridSize).fill(false)
-          }
-        }
-      }
+    // Call newGame on mount
+    onMounted(() => {
+      newGame();
+      registerKeyboardEvents();
+    });
 
-      this.grid = board;
-      this.pencilGrid = pencilGrid;
-    },
-    startTimer() {
-      this.gameStartTime = Date.now();
-      this.timerInterval = window.setInterval(() => {
-        this.elapsedTime = Math.floor((Date.now() - this.gameStartTime) / 1000);
-      }, 1000);
-    },
-
-    stopTimer() {
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-    },
-
-    calculateScore() {
-      const baseScore = 1000;
-      const timeMultiplier = Math.max(0, 1 - (this.elapsedTime / 600)); // 10 minutes max time
-      const difficultyMultiplier = this.difficulty === "extreme" ? 2 : 1;
-      this.score = Math.round(baseScore * timeMultiplier * difficultyMultiplier);
-    },
+    return {
+      sudokuLevel,
+      pencilGrid,
+      grid,
+      gridSize,
+      difficulty,
+      selected: selectedIndexes,
+      isSelecting,
+      pencilMode,
+      quickPencilAllEnabled,
+      selectedValue,
+      elapsedTime,
+      score,
+      isGameComplete,
+      startTimer,
+      stopTimer,
+      calculateScore,
+      solvePuzzle,
+      newGame,
+      clearAll,
+      generateSudoku,
+      togglePencilMode,
+      selectCell,
+      clearSelection,
+      judgeCell,
+      checkCellValue,
+      assignCell,
+      judgeBoard,
+      setGridValue,
+      togglePencilGridValue,
+      clearPencilGridCell,
+      setGridWrongValue,
+      quickPencilCell,
+      quickPencilAll,
+      toggleQuickPencilAll,
+      updatePencilGridValues
+    }
   }
 })
 </script>
@@ -468,78 +516,57 @@ export default defineComponent({
 <template>
   <div class="container m-auto">
     <h1 class="text-2xl font-bold underline mb-3">Sudoku {{ gridSize }} x {{ gridSize }}</h1>
-    <div class="flex flex-col-reverse md:flex-row h-full">
-      <!-- Sidebar -->
-      <div class="md:basis-1/4 md:border-r">
-        <div class="flex flex-col px-10">
-          <button
-            class="mt-5"
-            :class="{ 'button-dark': pencilMode, 'button': !pencilMode }"
-            @click="togglePencilMode"
-          >Pencil mode {{ pencilMode ? 'On' : 'Off' }}</button>
-          <div class="mt-5">
-            <label for="difficulty">Difficulty :</label>
-            <select v-model="difficulty">
-              <option value="medium">Medium</option>
-              <option value="extreme">Extreme</option>
-            </select>
-          </div>
-          <button class="button-dark mt-5" @click="newGame">New Game</button>
 
-          <button class="button-dark mt-5" @click="clearAll">Clear all</button>
-          <div class="w-full text-left mt-2 hidden md:block">
-            <kbd>Space</kbd> Toggle pencil mode On/Off
-            <br />
-            <kbd>Del</kbd> &nbsp;&nbsp; Delete Cell value
-            <br />
-            <kbd>Alt</kbd> &nbsp;&nbsp; Quick fill cell with pencil
-            <br />
-          </div>
-          <button class="button-dark mt-5" @click="quickPencilAll">Quick Pencil All</button>
-          (Fill with pencil all possible values)
-        </div>
-      </div>
-      <!-- Sudoku Grid -->
-      <div class="md:basis-3/4 h-full">
-        <div class="container mx-auto mt-10 h-full">
-          <div class="flex flex-wrap flex-row h-full">
-            <div class="md:basis-1/6"></div>
-            <div class="md:basis-3/6">
-              <sudoku-grid :grid="grid" :pencil-grid="pencilGrid" :sudoku-level="sudokuLevel">
-                <template v-slot:default="{ i, j, cell, pencil }">
-                  <sudoku-cell
-                    :cell="grid[i][j]"
-                    :pencil="pencil"
-                    :highlighted-value="selectedValue"
-                    :is-selected="(i == selected[0] && j == selected[1])"
-                    @onCellSelect="selectCell(i, j)"
-                  />
-                </template>
-              </sudoku-grid>
-            </div>
-            <div class="md:basis-1/12"></div>
-            <div class="basis-full md:basis-1/12 flex flex-row md:flex-col my-5 md:my-0">
-              <!-- Row -->
-              <button @click="assignCell(i)" v-for="i in 9" class="number-cell flex-grow">{{ i }}</button>
-              <button @click="assignCell(null)" class="number-cell flex-grow">X</button>
-              <!-- <div class="md:invisible w-full grid grid-rows-1 grid-cols-10">
-              </div>-->
-              <!-- Col -->
-              <!-- <div class="invisible md:visible grid grid-flow-row grid-cols-1 bg-red-300 h-full">
-              </div>-->
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="flex justify-center space-x-4 mb-4">
+      <button @click="newGame"
+        class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+        New Game
+      </button>
+      <button @click="solvePuzzle"
+        class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
+        Solve Puzzle
+      </button>
+      <button @click="toggleQuickPencilAll"
+        :class="[
+          'px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50',
+          quickPencilAllEnabled 
+            ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+            : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
+        ]">
+        Quick Pencil {{ quickPencilAllEnabled ? '(Auto)' : 'All' }}
+      </button>
+      <select v-model="difficulty"
+        class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <option value="medium">Medium</option>
+        <option value="extreme">Extreme</option>
+      </select>
     </div>
-    <div class="mb-4 flex justify-between items-center">
-      <div class="text-xl">
-        Time: {{ Math.floor(elapsedTime / 60) }}:{{ (elapsedTime % 60).toString().padStart(2, '0') }}
+
+    <div class="flex flex-col items-center">
+      <div class="mb-4">
+        <span class="mr-4">Time: {{ elapsedTime }}s</span>
+        <span>Score: {{ score }}</span>
       </div>
-      <div class="text-xl">
-        Score: {{ score }}
+
+      <div class="mb-4">
+        <label class="inline-flex items-center">
+          <input type="checkbox" v-model="pencilMode" class="form-checkbox h-5 w-5 text-indigo-600">
+          <span class="ml-2">Pencil Mode</span>
+        </label>
       </div>
+
+      <SudokuGrid :grid="grid" :pencil-grid="pencilGrid" :sudoku-level="sudokuLevel" v-slot="slotProps">
+        <SudokuCell 
+          :cell="slotProps.cell" 
+          :pencil="slotProps.pencil" 
+          :grid-size="gridSize"
+          :is-selected="selected[0] === slotProps.i && selected[1] === slotProps.j"
+          :highlighted-value="selectedValue"
+          @onCellSelect="selectCell(slotProps.i, slotProps.j)" 
+        />
+      </SudokuGrid>
     </div>
+
     <div v-if="isGameComplete" class="mt-4 text-center text-2xl text-green-600 font-bold">
       Congratulations! You completed the puzzle!
     </div>
