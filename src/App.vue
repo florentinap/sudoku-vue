@@ -514,62 +514,69 @@ export default defineComponent({
 </script>
 
 <template>
-  <div class="container m-auto">
-    <h1 class="text-2xl font-bold underline mb-3">Sudoku {{ gridSize }} x {{ gridSize }}</h1>
+  <div class="min-h-screen flex flex-col">
+    <div class="container mx-auto flex-grow pt-8 px-4">
+      <h1 class="text-2xl font-bold underline mb-3">Sudoku {{ gridSize }} x {{ gridSize }}</h1>
 
-    <div class="flex justify-center space-x-4 mb-4">
-      <button @click="newGame"
-        class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
-        New Game
-      </button>
-      <button @click="solvePuzzle"
-        class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
-        Solve Puzzle
-      </button>
-      <button @click="toggleQuickPencilAll"
-        :class="[
-          'px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50',
-          quickPencilAllEnabled 
-            ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
-            : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
-        ]">
-        Quick Pencil {{ quickPencilAllEnabled ? '(Auto)' : 'All' }}
-      </button>
-      <select v-model="difficulty"
-        class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <option value="medium">Medium</option>
-        <option value="extreme">Extreme</option>
-      </select>
-    </div>
-
-    <div class="flex flex-col items-center">
-      <div class="mb-4">
-        <span class="mr-4">Time: {{ elapsedTime }}s</span>
-        <span>Score: {{ score }}</span>
+      <div class="flex justify-center space-x-4 mb-4">
+        <button @click="newGame"
+          class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+          New Game
+        </button>
+        <button @click="solvePuzzle"
+          class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
+          Solve Puzzle
+        </button>
+        <button @click="toggleQuickPencilAll"
+          :class="[
+            'px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50',
+            quickPencilAllEnabled 
+              ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+              : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
+          ]">
+          Quick Pencil {{ quickPencilAllEnabled ? '(Auto)' : 'All' }}
+        </button>
+        <select v-model="difficulty"
+          class="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="medium">Medium</option>
+          <option value="extreme">Extreme</option>
+        </select>
       </div>
 
-      <div class="mb-4">
-        <label class="inline-flex items-center">
-          <input type="checkbox" v-model="pencilMode" class="form-checkbox h-5 w-5 text-indigo-600">
-          <span class="ml-2">Pencil Mode</span>
-        </label>
+      <div class="flex flex-col items-center">
+        <div class="mb-4">
+          <span class="mr-4">Time: {{ elapsedTime }}s</span>
+          <span>Score: {{ score }}</span>
+        </div>
+
+        <div class="mb-4">
+          <label class="inline-flex items-center">
+            <input type="checkbox" v-model="pencilMode" class="form-checkbox h-5 w-5 text-indigo-600">
+            <span class="ml-2">Pencil Mode</span>
+          </label>
+        </div>
+
+        <SudokuGrid :grid="grid" :pencil-grid="pencilGrid" :sudoku-level="sudokuLevel" v-slot="slotProps">
+          <SudokuCell 
+            :cell="slotProps.cell" 
+            :pencil="slotProps.pencil" 
+            :grid-size="gridSize"
+            :is-selected="selected[0] === slotProps.i && selected[1] === slotProps.j"
+            :highlighted-value="selectedValue"
+            @onCellSelect="selectCell(slotProps.i, slotProps.j)" 
+          />
+        </SudokuGrid>
       </div>
 
-      <SudokuGrid :grid="grid" :pencil-grid="pencilGrid" :sudoku-level="sudokuLevel" v-slot="slotProps">
-        <SudokuCell 
-          :cell="slotProps.cell" 
-          :pencil="slotProps.pencil" 
-          :grid-size="gridSize"
-          :is-selected="selected[0] === slotProps.i && selected[1] === slotProps.j"
-          :highlighted-value="selectedValue"
-          @onCellSelect="selectCell(slotProps.i, slotProps.j)" 
-        />
-      </SudokuGrid>
+      <div v-if="isGameComplete" class="mt-4 text-center text-2xl text-green-600 font-bold">
+        Congratulations! You completed the puzzle!
+      </div>
     </div>
-
-    <div v-if="isGameComplete" class="mt-4 text-center text-2xl text-green-600 font-bold">
-      Congratulations! You completed the puzzle!
-    </div>
+    <footer class="mt-8 py-4 bg-white/50 border-t border-indigo-100">
+      <div class="container mx-auto text-center text-sm text-indigo-600">
+        &copy; {{ new Date().getFullYear() }} Sudoku Vue. All rights reserved.
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -578,10 +585,9 @@ export default defineComponent({
   font-family: 'Poppins', Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
   @apply bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50;
   @apply text-indigo-900;
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .number-cell {
