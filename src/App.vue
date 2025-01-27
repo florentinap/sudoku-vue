@@ -103,11 +103,7 @@ export default defineComponent({
       };
 
       window.addEventListener('keydown', (ev) => {
-        console.log('Keydown event:', ev.code, 'Key:', ev.key);
-        console.log('Is selecting:', this.isSelecting);
-        console.log('Available keys:', Object.keys(ALLOWED_KEYS));
         if (ev.code in ALLOWED_KEYS) {
-          console.log('Key is allowed, value:', ALLOWED_KEYS[ev.code]);
           this.assignCell(ALLOWED_KEYS[ev.code])
           return;
         }
