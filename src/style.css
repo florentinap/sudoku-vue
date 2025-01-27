@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .game-board {
+    @apply grid grid-cols-3 grid-rows-3 gap-1 bg-gray-300 p-1 w-fit mx-auto;
+  }
+
+  .game-board-4 {
+    @apply grid-cols-4 grid-rows-4;
+  }
+
+  .grid-square {
+    @apply grid grid-cols-3 grid-rows-3 gap-px bg-gray-300;
+  }
+
+  .grid-square-4 {
+    @apply grid-cols-4 grid-rows-4;
+  }
+
+  .cell {
+    @apply w-12 h-12 bg-white flex items-center justify-center text-2xl font-bold cursor-pointer select-none;
+  }
+
+  .cell.selected {
+    @apply bg-blue-200;
+  }
+
+  .cell.wrong {
+    @apply text-red-500;
+  }
+
+  .cell.prefilled {
+    @apply text-gray-600;
+  }
+
+  .pencil-grid {
+    @apply grid grid-cols-3 grid-rows-3 gap-0 text-xs text-gray-500;
+  }
+
+  .pencil-grid-4 {
+    @apply grid-cols-4 grid-rows-4;
+  }
+}
