@@ -75,6 +75,7 @@ export default defineComponent({
     registerKeyboardEvents() {
       const ALLOWED_KEYS: { [key: string]: number | null } = {
         'Delete': null,
+        'Backspace': null,
         'Digit1': 1,
         'Digit2': 2,
         'Digit3': 3,
